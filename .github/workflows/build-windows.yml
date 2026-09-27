@@ -1,0 +1,64 @@
+name: Gerar RDF para Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Gerar RDF.exe
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name RDF --icon rdf.ico main.py
+          if (!(Test-Path "dist/RDF.exe")) { throw "RDF.exe não foi criado." }
+
+      - name: Criar versão portátil ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/RDF.exe" -DestinationPath "RDF_Portable_1.6.0.zip" -Force
+
+      - name: Instalar Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Gerar instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup não encontrado em $iscc" }
+          & $iscc "installer.iss"
+          if (!(Test-Path "output/RDF_Setup_1.6.0.exe")) { throw "Instalador não foi criado." }
+
+      - name: Publicar instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: RDF-Setup-Windows-1.6.0
+          path: output/RDF_Setup_1.6.0.exe
+          if-no-files-found: error
+
+      - name: Publicar versão portátil
+        uses: actions/upload-artifact@v4
+        with:
+          name: RDF-Portable-Windows-1.6.0
+          path: RDF_Portable_1.6.0.zip
+          if-no-files-found: error
